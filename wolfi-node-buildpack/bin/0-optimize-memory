@@ -1,0 +1,54 @@
+import os
+import sys
+
+def write_to_env(key, value):
+    toml_output = f'{key} = "{value}"\n'
+    try:
+        fd3 = os.fdopen(3, 'w')
+        fd3.write(toml_output)
+        fd3.close()
+    except OSError:
+        sys.stdout.write(toml_output)
+
+def get_memory_limit():
+    paths = [
+        "/sys/fs/cgroup/memory.max",
+        "/sys/fs/cgroup/memory/memory.limit_in_bytes"
+    ]
+    for path in paths:
+        if os.path.exists(path):
+            try:
+                with open(path, 'r') as f:
+                    content = f.read().strip()
+                    if content and content != "max":
+                        return int(content)
+            except:
+                pass
+    return None
+
+def main():
+    mb_available = None
+    env_limit = os.environ.get("MEMORY_AVAILABLE")
+    
+    if env_limit:
+        try:
+            mb_available = int(env_limit)
+        except ValueError:
+            pass
+            
+    if mb_available is None:
+        limit = get_memory_limit()
+        if limit:
+            mb_available = limit // (1024 * 1024)
+
+    if mb_available:
+        write_to_env("MEMORY_AVAILABLE", str(mb_available))
+        
+        if os.environ.get("OPTIMIZE_MEMORY") == "true":
+            max_heap = int(mb_available * 0.75)
+            existing_opts = os.environ.get("NODE_OPTIONS", "")
+            opts = f"{existing_opts} --max_old_space_size={max_heap}".strip()
+            write_to_env("NODE_OPTIONS", opts)
+
+if __name__ == "__main__":
+    main()

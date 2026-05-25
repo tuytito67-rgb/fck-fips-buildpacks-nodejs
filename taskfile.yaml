@@ -1,0 +1,46 @@
+version: '3'
+
+tasks:
+  build-stack:
+    cmds:
+      - docker build -f stack/build.Dockerfile -t ghcr.io/samyt8336-arch/wolfi-build-base:latest .
+      - docker build -f stack/run.Dockerfile -t ghcr.io/samyt8336-arch/wolfi-run-base:latest .
+
+  package-bp:
+    cmds:
+      - pack buildpack package ghcr.io/samyt8336-arch/wolfi-node-engine:1.0.0 --path ./wolfi-node-buildpack
+
+  package-meta:
+    deps: [package-bp]
+    cmds:
+      - pack buildpack package ghcr.io/samyt8336-arch/nodejs-meta:1.0.0 --config ./wolfi-nodejs-meta/package.toml 
+
+  create-builder:
+    cmds:
+      - pack builder create ghcr.io/samyt8336-arch/fck-fips-builder-nodejs:latest --config builder.toml 
+
+  build-app:
+    cmds:
+      - git clone https://github.com/samyt8336-arch/fck_ips_lab || echo "it is exist"
+      - |
+        pack build fck-fips-lab \
+          --path ./fck_ips_lab \
+          --builder ghcr.io/samyt8336-arch/fck-fips-builder-nodejs:latest \
+          --env NODE_ENV=production \
+          --env BP_NODE_VERSION=22 \
+          --env BP_NODE_RUN_SCRIPTS="build" \
+          --env BP_NODE_OPTIMIZE_MEMORY=true
+
+  run-app:
+    cmds:
+      - |
+        docker run -it --rm -p 3000:3000 \
+          --memory 512m \
+          --env NODE_OPTIONS="--enable-fips" \
+          fck-fips-lab \
+          /workspace/start.sh
+
+  all:
+    cmds:
+      - task build-app
+      - task run-app

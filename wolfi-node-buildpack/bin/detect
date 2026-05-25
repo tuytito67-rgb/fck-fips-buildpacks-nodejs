@@ -1,0 +1,101 @@
+#!/usr/bin/env python3
+import os
+import sys
+import json
+import yaml
+from semantic_version import NpmSpec
+
+def parse_version_string(content):
+    content = content.strip().lower()
+    if content.startswith('v'):
+        content = content[1:]
+    lts_map = {
+        "argon": "4.*", "boron": "6.*", "carbon": "8.*",
+        "dubnium": "10.*", "erbium": "12.*", "fermium": "14.*",
+        "gallium": "16.*", "hydrogen": "18.*", "iron": "20.*"
+    }
+    if content.startswith('lts/'):
+        return lts_map.get(content.split('/')[-1], "*")
+    if content in ["node", "lts/*"]:
+        return "*"
+    return content
+
+def validate_semver(version):
+    if not version:
+        return False
+    if version == "*":
+        return True
+    try:
+        NpmSpec(version)
+        return True
+    except ValueError:
+        return False
+
+def main():
+    working_dir = os.getcwd()
+    build_plan_path = sys.argv[2]
+    
+    project_path = working_dir
+    custom_path = os.environ.get("BP_NODE_PROJECT_PATH", "")
+    if custom_path:
+        project_path = os.path.normpath(os.path.join(working_dir, custom_path))
+        if not os.path.exists(project_path) or not os.path.isdir(project_path):
+            print(f"expected value derived from BP_NODE_PROJECT_PATH [{project_path}] to be an existing directory")
+            sys.exit(100)
+
+    requirements = []
+
+    env_version = os.environ.get("BP_NODE_VERSION", "")
+    if validate_semver(env_version):
+        requirements.append({"name": "node", "version": env_version, "source": "BP_NODE_VERSION"})
+
+    nvmrc_path = os.path.join(project_path, ".nvmrc")
+    if os.path.exists(nvmrc_path):
+        with open(nvmrc_path, 'r') as f:
+            ver = parse_version_string(f.read())
+            if validate_semver(ver):
+                requirements.append({"name": "node", "version": ver, "source": ".nvmrc"})
+
+    nv_path = os.path.join(project_path, ".node-version")
+    if os.path.exists(nv_path):
+        with open(nv_path, 'r') as f:
+            ver = parse_version_string(f.read())
+            if validate_semver(ver):
+                requirements.append({"name": "node", "version": ver, "source": ".node-version"})
+
+    pkg_path = os.path.join(project_path, "package.json")
+    if os.path.exists(pkg_path):
+        try:
+            with open(pkg_path, 'r') as f:
+                ver = json.load(f).get("engines", {}).get("node", "")
+                if validate_semver(ver):
+                    requirements.append({"name": "node", "version": ver, "source": "package.json"})
+        except Exception:
+            pass
+
+    yml_path = os.path.join(project_path, "buildpack.yml")
+    if os.path.exists(yml_path):
+        try:
+            with open(yml_path, 'r') as f:
+                ver = yaml.safe_load(f).get("nodejs", {}).get("version", "")
+                if validate_semver(ver):
+                    requirements.append({"name": "node", "version": str(ver), "source": "buildpack.yml"})
+        except Exception:
+            pass
+
+    def render_toml(reqs):
+        out = ""
+        for r in reqs:
+            out += f"[[requires]]\nname = \"{r['name']}\"\n"
+            out += f"[requires.metadata]\nversion = \"{r['version']}\"\n"
+            out += f"version-source = \"{r['source']}\"\n\n"
+        return out
+
+    output = "[[provides]]\nname = \"node\"\n\n" + render_toml(requirements)
+    output += "[[or]]\n[[provides]]\nname = \"node\"\n[[provides]]\nname = \"npm\"\n\n" + render_toml(requirements)
+
+    with open(build_plan_path, 'w') as f:
+        f.write(output)
+
+if __name__ == "__main__":
+    main()

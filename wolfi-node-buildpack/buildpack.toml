@@ -1,0 +1,15 @@
+api = "0.10"
+
+[buildpack]
+  id = "fckfips/wolfi-node-engine"
+  version = "1.0.0"
+  name = "Wolfi Node.js FIPS Engine"
+  sbom-formats = [ "application/vnd.cyclonedx+json" ]
+
+[[targets]]
+  os = "linux"
+  arch = "amd64"
+
+[[targets]]
+  os = "linux"
+  arch = "arm64"

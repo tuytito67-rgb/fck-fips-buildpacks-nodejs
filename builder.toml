@@ -1,0 +1,25 @@
+description = "fck-fips Wolfi Node.js FIPS Builder"
+
+[[buildpacks]]
+  uri = "docker://ghcr.io/samyt8336-arch/nodejs-meta:1.0.0"
+
+[[order]]
+  [[order.group]]
+    id = "fckfips/nodejs"
+    version = "1.0.0"
+
+[stack]
+  id = "io.fckfips.stacks.wolfi"
+  build-image = "ghcr.io/samyt8336-arch/wolfi-build-base:latest"
+  run-image = "ghcr.io/samyt8336-arch/wolfi-run-base:latest"
+
+[lifecycle]
+  version = "0.19.0"
+
+[[targets]]
+  os = "linux"
+  arch = "amd64"
+
+[[targets]]
+  os = "linux"
+  arch = "arm64"
