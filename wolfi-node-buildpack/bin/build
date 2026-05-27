@@ -55,19 +55,10 @@ def is_cache_valid(node_layer_path, resolved_version):
     except:
         return False
 
-def install_node(node_layer_path, resolved_url):
-    if os.path.exists(node_layer_path):
-        shutil.rmtree(node_layer_path)
-    os.makedirs(node_layer_path, exist_ok=True)
-    
-    req = urllib.request.Request(resolved_url, headers={'User-Agent': 'Mozilla/5.0'})
-    with urllib.request.urlopen(req) as r:
-        apk_data = r.read()
-        
-    with tarfile.open(fileobj=io.BytesIO(apk_data), mode="r:gz") as tar:
-        tar.extractall(path=node_layer_path)
-
 def setup_exec_d(cnb_dir, node_layer_path, arch):
+    import shutil
+    import subprocess
+    
     exec_d_path = os.path.join(node_layer_path, "exec.d")
     os.makedirs(exec_d_path, exist_ok=True)
     
@@ -79,14 +70,14 @@ def setup_exec_d(cnb_dir, node_layer_path, arch):
         shutil.copy(opt_mem_precompiled, os.path.join(exec_d_path, "0-optimize-memory"))
         shutil.copy(inspector_precompiled, os.path.join(exec_d_path, "1-inspector"))
     else:
-        opt_mem_src = os.path.join(cnb_dir, "optimize_memory.py")
-        inspector_src = os.path.join(cnb_dir, "inspector.py")
+        opt_mem_src = os.path.join(cnb_dir, "bin", "0-optimize-memory")
+        inspector_src = os.path.join(cnb_dir, "bin", "1-inspector")
         
         subprocess.run(["pyinstaller", "--onefile", opt_mem_src], check=True, stdout=subprocess.DEVNULL)
         subprocess.run(["pyinstaller", "--onefile", inspector_src], check=True, stdout=subprocess.DEVNULL)
         
-        shutil.copy("dist/optimize_memory", os.path.join(exec_d_path, "0-optimize-memory"))
-        shutil.copy("dist/inspector", os.path.join(exec_d_path, "1-inspector"))
+        shutil.copy("dist/0-optimize-memory", os.path.join(exec_d_path, "0-optimize-memory"))
+        shutil.copy("dist/1-inspector", os.path.join(exec_d_path, "1-inspector"))
         
         shutil.rmtree("build", ignore_errors=True)
         shutil.rmtree("dist", ignore_errors=True)
@@ -96,6 +87,18 @@ def setup_exec_d(cnb_dir, node_layer_path, arch):
                 
     os.chmod(os.path.join(exec_d_path, "0-optimize-memory"), 0o755)
     os.chmod(os.path.join(exec_d_path, "1-inspector"), 0o755)
+
+def install_node(node_layer_path, resolved_url):
+    if os.path.exists(node_layer_path):
+        shutil.rmtree(node_layer_path)
+    os.makedirs(node_layer_path, exist_ok=True)
+    
+    req = urllib.request.Request(resolved_url, headers={'User-Agent': 'Mozilla/5.0'})
+    with urllib.request.urlopen(req) as r:
+        apk_data = r.read()
+        
+    with tarfile.open(fileobj=io.BytesIO(apk_data), mode="r:gz") as tar:
+        tar.extractall(path=node_layer_path)
 
 def setup_environment(node_layer_path):
     env_dir = os.path.join(node_layer_path, "env")
