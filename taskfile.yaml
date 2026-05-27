@@ -26,9 +26,9 @@ tasks:
         pack build fck-fips-lab \
           --path ./fck_ips_lab \
           --builder my-custom-builder:latest \
+          --env NODE_ENV=production \
           --env BP_NODE_VERSION=22 \
           --env BP_NODE_RUN_SCRIPTS="build" \
-          --env BP_NODE_CLEANUP_DEV_DEPENDENCIES \
           --env BP_NODE_OPTIMIZE_MEMORY=true
 
 
