@@ -26,6 +26,7 @@ tasks:
     cmds:
       - task build-stack
       - task package-bp
+      - task package-meta
       - task create-builder
       - task build-app
   test:

@@ -2,11 +2,12 @@ FROM ghcr.io/taha2samy/wolfi-openssl-fips:3.5.5-dev AS fips_source
 
 FROM cgr.dev/chainguard/wolfi-base
 
-RUN apk update && apk add python-3 py3-pip build-base posix-libc-utils git bash
+RUN apk update && apk add python-3 py3-pip build-base posix-libc-utils git bash libuv c-ares brotli nghttp2 icu
 
 RUN pip install --break-system-packages pyinstaller semantic_version pyyaml
 
 COPY --from=fips_source /usr/local /usr/local
+
 RUN mkdir -p /usr/lib/ossl-modules /etc/ssl && \
     ln -sf /usr/local/lib/ossl-modules/fips.so /usr/lib/ossl-modules/fips.so && \
     ln -sf /usr/local/ssl/openssl.cnf /etc/ssl/openssl.cnf

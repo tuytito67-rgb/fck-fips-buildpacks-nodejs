@@ -1,10 +1,17 @@
 description = "My Custom Wolfi Node.js FIPS Builder"
 
-[build-image]
-  image = "taha/wolfi-build-base:latest"
+[[buildpacks]]
+  uri = "docker://my-company/nodejs-meta:1.0.0"
 
-[run-image]
-  image = "taha/wolfi-run-base:latest"
+[[order]]
+  [[order.group]]
+    id = "my-company/nodejs"
+    version = "1.0.0"
+
+[stack]
+  id = "io.mycompany.stacks.wolfi"
+  build-image = "taha/wolfi-build-base:latest"
+  run-image = "taha/wolfi-run-base:latest"
 
 [lifecycle]
   version = "0.19.0"
@@ -16,11 +23,3 @@ description = "My Custom Wolfi Node.js FIPS Builder"
 [[targets]]
   os = "linux"
   arch = "arm64"
-
-[[buildpacks]]
-  uri = "docker://my-company/nodejs-meta:1.0.0"
-
-[[order]]
-  [[order.group]]
-    id = "my-company/nodejs"
-    version = "1.0.0"

@@ -3,7 +3,6 @@ import os
 import sys
 import platform
 import json
-import yaml
 import urllib.request
 import gzip
 import io
@@ -11,127 +10,95 @@ import tarfile
 import subprocess
 import shutil
 import re
-
-def resolve_wolfi_package(arch, major_version):
+def resolve_wolfi_package(arch, package_name):
     base_url = f"https://packages.wolfi.dev/os/{arch}/"
     index_url = f"{base_url}APKINDEX.tar.gz"
-    
     req = urllib.request.Request(index_url, headers={'User-Agent': 'Mozilla/5.0'})
     with urllib.request.urlopen(req) as r:
         content = r.read()
-        
     with gzip.GzipFile(fileobj=io.BytesIO(content)) as f:
         with tarfile.open(fileobj=io.BytesIO(f.read())) as tar:
             index_data = tar.extractfile("APKINDEX").read().decode('utf-8')
-            
-    package_name = f"nodejs-{major_version}"
     packages = [pkg for pkg in index_data.split('\n\n') if f"P:{package_name}\n" in pkg]
     if not packages:
         return None, None
-        
     latest_pkg = sorted(packages, key=lambda x: [line for line in x.split('\n') if line.startswith('V:')][0])[-1]
     version = [line[2:] for line in latest_pkg.split('\n') if line.startswith('V:')][0]
     return f"{base_url}{package_name}-{version}.apk", version
 
-def is_cache_valid(node_layer_path, resolved_version):
-    toml_path = f"{node_layer_path}.toml"
-    if not os.path.exists(toml_path):
-        return False
-    try:
-        with open(toml_path, 'r') as f:
-            lines = f.readlines()
-        metadata = {}
-        in_metadata = False
-        for line in lines:
-            line = line.strip()
-            if line == "[metadata]":
-                in_metadata = True
-                continue
-            if line.startswith("[") and line != "[metadata]":
-                in_metadata = False
-            if in_metadata and "=" in line:
-                k, v = line.split("=", 1)
-                metadata[k.strip()] = v.strip().replace('"', '')
-        return metadata.get("version") == resolved_version
-    except:
-        return False
-
-def setup_exec_d(cnb_dir, node_layer_path, arch):
-    import shutil
-    import subprocess
-    
-    exec_d_path = os.path.join(node_layer_path, "exec.d")
-    os.makedirs(exec_d_path, exist_ok=True)
-    
-    precompiled_dir = os.path.join(cnb_dir, "bin", "linux", arch)
-    opt_mem_precompiled = os.path.join(precompiled_dir, "0-optimize-memory")
-    inspector_precompiled = os.path.join(precompiled_dir, "1-inspector")
-    
-    if os.path.exists(opt_mem_precompiled) and os.path.exists(inspector_precompiled):
-        shutil.copy(opt_mem_precompiled, os.path.join(exec_d_path, "0-optimize-memory"))
-        shutil.copy(inspector_precompiled, os.path.join(exec_d_path, "1-inspector"))
-    else:
-        opt_mem_src = os.path.join(cnb_dir, "bin", "0-optimize-memory")
-        inspector_src = os.path.join(cnb_dir, "bin", "1-inspector")
-        
-        subprocess.run(["pyinstaller", "--onefile", opt_mem_src], check=True, stdout=subprocess.DEVNULL)
-        subprocess.run(["pyinstaller", "--onefile", inspector_src], check=True, stdout=subprocess.DEVNULL)
-        
-        shutil.copy("dist/0-optimize-memory", os.path.join(exec_d_path, "0-optimize-memory"))
-        shutil.copy("dist/1-inspector", os.path.join(exec_d_path, "1-inspector"))
-        
-        shutil.rmtree("build", ignore_errors=True)
-        shutil.rmtree("dist", ignore_errors=True)
-        for f in os.listdir("."):
-            if f.endswith(".spec"):
-                os.remove(f)
-                
-    os.chmod(os.path.join(exec_d_path, "0-optimize-memory"), 0o755)
-    os.chmod(os.path.join(exec_d_path, "1-inspector"), 0o755)
-
-def install_node(node_layer_path, resolved_url):
-    if os.path.exists(node_layer_path):
-        shutil.rmtree(node_layer_path)
-    os.makedirs(node_layer_path, exist_ok=True)
-    
-    req = urllib.request.Request(resolved_url, headers={'User-Agent': 'Mozilla/5.0'})
-    with urllib.request.urlopen(req) as r:
-        apk_data = r.read()
-        
-    with tarfile.open(fileobj=io.BytesIO(apk_data), mode="r:gz") as tar:
-        tar.extractall(path=node_layer_path)
-
-def setup_environment(node_layer_path):
-    env_dir = os.path.join(node_layer_path, "env")
+def setup_layer_env(layer_path):
+    env_dir = os.path.join(layer_path, "env")
     os.makedirs(env_dir, exist_ok=True)
-    
-    bin_dir = os.path.join(node_layer_path, "usr", "bin")
-    
+    bin_dir = os.path.join(layer_path, "usr", "bin")
     with open(os.path.join(env_dir, "PATH.prepend"), 'w') as f:
         f.write(bin_dir)
-        
     with open(os.path.join(env_dir, "PATH.delim"), 'w') as f:
         f.write(":")
-        
-    with open(os.path.join(env_dir, "NODE_HOME"), 'w') as f:
-        f.write(node_layer_path)
+    if "node" in layer_path:
+        with open(os.path.join(env_dir, "NODE_HOME"), 'w') as f:
+            f.write(layer_path)
+        if os.environ.get("BP_NODE_OPTIMIZE_MEMORY") == "true":
+            with open(os.path.join(env_dir, "OPTIMIZE_MEMORY"), 'w') as f:
+                f.write("true")
 
-    if os.environ.get("BP_NODE_OPTIMIZE_MEMORY") == "true":
-        with open(os.path.join(env_dir, "OPTIMIZE_MEMORY"), 'w') as f:
-            f.write("true")
-            
-def write_layer_metadata(node_layer_path, resolved_version):
-    toml_path = f"{node_layer_path}.toml"
+def write_layer_metadata(layer_path, version):
     content = f"""[types]
-  build = true
   launch = true
+  build = true
   cache = true
 
 [metadata]
-  version = "{resolved_version}"
+  version = "{version}"
 """
-    with open(toml_path, 'w') as f:
+    with open(f"{layer_path}.toml", 'w') as f:
         f.write(content)
+
+def ensure_package(layers_dir, arch, package_name, layer_id):
+    url, version = resolve_wolfi_package(arch, package_name)
+    if not url:
+        sys.exit(1)
+    layer_path = os.path.join(layers_dir, layer_id)
+    toml_path = f"{layer_path}.toml"
+    is_valid = False
+    if os.path.exists(toml_path):
+        with open(toml_path, 'r') as f:
+            if f'version = "{version}"' in f.read():
+                is_valid = True
+    if not is_valid:
+        print(f"--- Delivering {package_name} {version} to {layer_id} layer ---")
+        if os.path.exists(layer_path):
+            shutil.rmtree(layer_path)
+        os.makedirs(layer_path, exist_ok=True)
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req) as r:
+            with tarfile.open(fileobj=io.BytesIO(r.read()), mode="r:gz") as tar:
+                tar.extractall(path=layer_path)
+    else:
+        print(f"--- Reusing cached {layer_id} layer ---")
+    setup_layer_env(layer_path)
+    write_layer_metadata(layer_path, version)
+    return layer_path
+
+def setup_exec_d(cnb_dir, node_layer_path, arch):
+    exec_d_path = os.path.join(node_layer_path, "exec.d")
+    os.makedirs(exec_d_path, exist_ok=True)
+    precompiled_dir = os.path.join(cnb_dir, "bin", "linux", arch)
+    if os.path.exists(os.path.join(precompiled_dir, "0-optimize-memory")):
+        shutil.copy(os.path.join(precompiled_dir, "0-optimize-memory"), os.path.join(exec_d_path, "0-optimize-memory"))
+        shutil.copy(os.path.join(precompiled_dir, "1-inspector"), os.path.join(exec_d_path, "1-inspector"))
+    else:
+        opt_mem_src = os.path.join(cnb_dir, "bin", "0-optimize-memory")
+        inspector_src = os.path.join(cnb_dir, "bin", "1-inspector")
+        subprocess.run(["pyinstaller", "--onefile", opt_mem_src], check=True, stdout=subprocess.DEVNULL)
+        subprocess.run(["pyinstaller", "--onefile", inspector_src], check=True, stdout=subprocess.DEVNULL)
+        shutil.copy("dist/0-optimize-memory", os.path.join(exec_d_path, "0-optimize-memory"))
+        shutil.copy("dist/1-inspector", os.path.join(exec_d_path, "1-inspector"))
+        shutil.rmtree("build", ignore_errors=True)
+        shutil.rmtree("dist", ignore_errors=True)
+        for f in os.listdir("."):
+            if f.endswith(".spec"): os.remove(f)
+    os.chmod(os.path.join(exec_d_path, "0-optimize-memory"), 0o755)
+    os.chmod(os.path.join(exec_d_path, "1-inspector"), 0o755)
 
 def parse_requested_version(plan_path):
     if not os.path.exists(plan_path):
@@ -139,14 +106,15 @@ def parse_requested_version(plan_path):
     try:
         with open(plan_path, 'r') as f:
             content = f.read()
-        match = re.search(r'version\s*=\s*"([^"]+)"', content)
-        if match:
-            raw_ver = match.group(1)
-            for char in ["^", "~", "<", ">", "="]:
-                raw_ver = raw_ver.replace(char, "")
-            major = raw_ver.split(".")[0]
-            if major.isdigit():
-                return major
+        entries = content.split('[[entries]]')
+        for entry in entries:
+            if 'name = "node"' in entry:
+                match = re.search(r'version\s*=\s*"([^"]+)"', entry)
+                if match:
+                    v = match.group(1)
+                    for c in ["^", "~", "<", ">", "="]: v = v.replace(c, "")
+                    major = v.split(".")[0]
+                    if major.isdigit(): return major
     except:
         pass
     return "20"
@@ -155,7 +123,6 @@ def main():
     layers_dir = sys.argv[1]
     platform_dir = sys.argv[2]
     build_plan_path = sys.argv[3]
-    
     raw_arch = platform.machine().lower()
     if raw_arch in ["x86_64", "amd64"]:
         arch = "x86_64"
@@ -163,27 +130,14 @@ def main():
         arch = "aarch64"
     else:
         arch = raw_arch
-
     cnb_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    major_version = parse_requested_version(build_plan_path)
-    
-    resolved_url, resolved_version = resolve_wolfi_package(arch, major_version)
-    if not resolved_url:
-        sys.exit(1)
-        
-    node_layer_path = os.path.join(layers_dir, "node")
-    
-
-    if is_cache_valid(node_layer_path, resolved_version):
-        print("--- Reusing cached Node.js layer ---")
-        setup_environment(node_layer_path)
-        write_layer_metadata(node_layer_path, resolved_version)
-    else:
-        print(f"--- Installing Node.js {resolved_version} ---")
-        install_node(node_layer_path, resolved_url)
-        setup_exec_d(cnb_dir, node_layer_path, arch)
-        setup_environment(node_layer_path)
-        write_layer_metadata(node_layer_path, resolved_version)
+    major_version = os.environ.get("BP_NODE_VERSION", "")
+    if not major_version:
+        major_version = parse_requested_version(build_plan_path)
+    major_version = re.sub(r'[^0-9]', '', major_version.split('.')[0]) or "20"
+    node_path = ensure_package(layers_dir, arch, f"nodejs-{major_version}", "node")
+    ensure_package(layers_dir, arch, "npm", "npm")
+    setup_exec_d(cnb_dir, node_path, arch)
 
 if __name__ == "__main__":
     main()
