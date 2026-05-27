@@ -1,0 +1,32 @@
+version: '3'
+
+tasks:
+  build-stack:
+    cmds:
+      - docker build -f stack/build.Dockerfile -t taha/wolfi-build-base:latest .
+      - docker build -f stack/run.Dockerfile -t taha/wolfi-run-base:latest .
+
+  package-bp:
+    cmds:
+      - pack buildpack package my-company/wolfi-node-engine:1.0.0 --path ./wolfi-node-buildpack
+
+  create-builder:
+    cmds:
+      - pack builder create my-custom-builder:latest --config builder.toml --pull-policy never
+
+  build-app:
+    cmds:
+      - pack build my-node-app:latest --builder my-custom-builder:latest --env BP_NODE_VERSION=20
+
+  test:
+    cmds:
+      - docker run -it --rm --entrypoint sh -u 0 my-node-app:latest
+
+  clean:
+    cmds:
+      - docker rm -f temp-fips || true
+      - rm -rf fips-image-flat || true
+      - docker rmi -f taha/wolfi-build-base:latest taha/wolfi-run-base:latest my-custom-builder:latest my-node-app:latest || true
+
+  all:
+    deps: [build-stack, package-bp, create-builder, build-app]
