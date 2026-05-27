@@ -1,0 +1,23 @@
+import os
+import sys
+
+def main():
+    if os.environ.get("BPL_DEBUG_ENABLED") == "true":
+        node_opts = os.environ.get("NODE_OPTIONS", "")
+        
+        if "--inspect" in node_opts:
+            return
+
+        debug_port = os.environ.get("BPL_DEBUG_PORT", "")
+        if debug_port:
+            option = f"--inspect=127.0.0.1:{debug_port}"
+        else:
+            option = "--inspect"
+
+        if node_opts:
+            option = f"{node_opts} {option}"
+
+        print(f'NODE_OPTIONS = "{option}"')
+
+if __name__ == "__main__":
+    main()
