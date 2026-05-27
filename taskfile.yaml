@@ -39,7 +39,7 @@ tasks:
           --memory 512m \
           --env NODE_OPTIONS="--enable-fips" \
           fck-fips-lab \
-          node dist/server.cjs
+          /workspace/start.sh
 
 
   all:
