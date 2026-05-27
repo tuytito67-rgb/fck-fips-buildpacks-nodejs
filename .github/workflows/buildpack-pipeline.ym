@@ -1,0 +1,129 @@
+name: Buildpack Pipeline
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Install Crane
+        uses: imjasonh/setup-crane@v0.4
+
+      - name: Install Pack CLI
+        uses: buildpacks/github-actions/setup-pack@v2.0.0
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set lower-case owner env
+        run: |
+          echo "OWNER_LC=${OWNER,,}" >> ${GITHUB_ENV}
+        env:
+          OWNER: '${{ github.repository_owner }}'
+
+      - name: Build Build-Base
+        id: build-base
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: stack/build.Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/wolfi-build-base:latest
+
+      - name: Build Run-Base
+        id: run-base
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: stack/run.Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/wolfi-run-base:latest
+
+      - name: Update Configuration Templates for GHCR
+        run: |
+          sed -i "s|my-company/wolfi-node-engine|${{ env.REGISTRY }}/${{ env.OWNER_LC }}/wolfi-node-engine|g" wolfi-nodejs-meta/package.toml
+          sed -i "s|my-company/nodejs-meta|${{ env.REGISTRY }}/${{ env.OWNER_LC }}/nodejs-meta|g" builder.toml
+          sed -i "s|taha/wolfi-build-base|${{ env.REGISTRY }}/${{ env.OWNER_LC }}/wolfi-build-base|g" builder.toml
+          sed -i "s|taha/wolfi-run-base|${{ env.REGISTRY }}/${{ env.OWNER_LC }}/wolfi-run-base|g" builder.toml
+
+      - name: Package and Publish Buildpacks
+        run: |
+          pack buildpack package ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/wolfi-node-engine:1.0.0 \
+            --path ./wolfi-node-buildpack \
+            --publish
+
+          pack buildpack package ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/nodejs-meta:1.0.0 \
+            --config ./wolfi-nodejs-meta/package.toml \
+            --publish
+
+      - name: Create and Publish Custom Builder
+        run: |
+          pack builder create ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/my-custom-builder:latest \
+            --config builder.toml \
+            --publish
+
+      - name: Resolve Image Digests
+        id: resolve-digests
+        run: |
+          echo "engine_digest=$(crane digest ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/wolfi-node-engine:1.0.0)" >> $GITHUB_OUTPUT
+          echo "meta_digest=$(crane digest ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/nodejs-meta:1.0.0)" >> $GITHUB_OUTPUT
+          echo "builder_digest=$(crane digest ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/my-custom-builder:latest)" >> $GITHUB_OUTPUT
+
+      - name: Attest Build Base Image
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/wolfi-build-base
+          subject-digest: ${{ steps.build-base.outputs.digest }}
+          push-to-registry: true
+
+      - name: Attest Run Base Image
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/wolfi-run-base
+          subject-digest: ${{ steps.run-base.outputs.digest }}
+          push-to-registry: true
+
+      - name: Attest Wolfi Node Engine Buildpack
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/wolfi-node-engine
+          subject-digest: ${{ steps.resolve-digests.outputs.engine_digest }}
+          push-to-registry: true
+
+      - name: Attest Node.js Meta Buildpack
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/nodejs-meta
+          subject-digest: ${{ steps.resolve-digests.outputs.meta_digest }}
+          push-to-registry: true
+
+      - name: Attest Custom Builder Image
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/my-custom-builder
+          subject-digest: ${{ steps.resolve-digests.outputs.builder_digest }}
+          push-to-registry: true

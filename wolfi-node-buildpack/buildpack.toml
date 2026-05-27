@@ -4,6 +4,7 @@ api = "0.10"
   id = "my-company/wolfi-node-engine"
   version = "1.0.0"
   name = "Wolfi Node.js FIPS Engine"
+  sbom-formats = [ "application/vnd.cyclonedx+json" ]
 
 [[targets]]
   os = "linux"
