@@ -17,7 +17,12 @@ tasks:
   build-app:
     cmds:
       - pack build my-node-app:latest --builder my-custom-builder:latest --env BP_NODE_VERSION=20
-
+  angs:
+    cmds:
+      - task build-stack
+      - task package-bp
+      - task create-builder
+      - task build-app
   test:
     cmds:
       - docker run -it --rm --entrypoint sh -u 0 my-node-app:latest

@@ -106,12 +106,20 @@ def setup_environment(node_layer_path):
     os.makedirs(env_dir, exist_ok=True)
     
     bin_dir = os.path.join(node_layer_path, "usr", "bin")
+    
     with open(os.path.join(env_dir, "PATH.prepend"), 'w') as f:
         f.write(bin_dir)
         
-    with open(os.path.join(env_dir, "NODE_HOME.default"), 'w') as f:
+    with open(os.path.join(env_dir, "PATH.delim"), 'w') as f:
+        f.write(":")
+        
+    with open(os.path.join(env_dir, "NODE_HOME"), 'w') as f:
         f.write(node_layer_path)
 
+    if os.environ.get("BP_NODE_OPTIMIZE_MEMORY") == "true":
+        with open(os.path.join(env_dir, "OPTIMIZE_MEMORY"), 'w') as f:
+            f.write("true")
+            
 def write_layer_metadata(node_layer_path, resolved_version):
     toml_path = f"{node_layer_path}.toml"
     content = f"""[types]
@@ -165,8 +173,11 @@ def main():
         
     node_layer_path = os.path.join(layers_dir, "node")
     
+
     if is_cache_valid(node_layer_path, resolved_version):
         print("--- Reusing cached Node.js layer ---")
+        setup_environment(node_layer_path)
+        write_layer_metadata(node_layer_path, resolved_version)
     else:
         print(f"--- Installing Node.js {resolved_version} ---")
         install_node(node_layer_path, resolved_url)
