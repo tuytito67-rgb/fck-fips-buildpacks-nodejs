@@ -10,9 +10,14 @@ tasks:
     cmds:
       - pack buildpack package my-company/wolfi-node-engine:1.0.0 --path ./wolfi-node-buildpack
 
+  package-meta:
+    deps: [package-bp]
+    cmds:
+      - pack buildpack package my-company/nodejs-meta:1.0.0 --config ./wolfi-nodejs-meta/package.toml 
+
   create-builder:
     cmds:
-      - pack builder create my-custom-builder:latest --config builder.toml --pull-policy never
+      - pack builder create my-custom-builder:latest --config builder.toml 
 
   build-app:
     cmds:
