@@ -1,17 +1,14 @@
 api = "0.10"
 
 [buildpack]
-  id = "wolfi-node-engine"
+  id = "my-company/wolfi-node-engine"
   version = "1.0.0"
   name = "Wolfi Node.js FIPS Engine"
 
-[[stacks]]
-  id = "*"
-
 [[targets]]
+  os = "linux"
   arch = "amd64"
-  os = "linux"
 
 [[targets]]
-  arch = "arm64"
   os = "linux"
+  arch = "arm64"

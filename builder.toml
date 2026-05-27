@@ -1,0 +1,25 @@
+description = "My Custom Wolfi Node.js Builder"
+
+[[buildpacks]]
+  uri = "docker://my-company/wolfi-node-engine:1.0.0"
+
+[[order]]
+  [[order.group]]
+    id = "my-company/wolfi-node-engine"
+    version = "1.0.0"
+
+[stack]
+  id = "io.mycompany.stacks.wolfi"
+  build-image = "wolfi-build-base:latest"
+  run-image = "wolfi-run-base:latest"
+
+[lifecycle]
+  version = "0.19.0"
+
+[[targets]]
+  os = "linux"
+  arch = "amd64"
+
+[[targets]]
+  os = "linux"
+  arch = "arm64"
