@@ -5,6 +5,15 @@ api = "0.10"
   name = "Custom Paketo Buildpack for Node.js"
   version = "1.0.0"
 
+
+[[targets]]
+  os = "linux"
+  arch = "amd64"
+
+[[targets]]
+  os = "linux"
+  arch = "arm64"
+
 [[order]]
   [[order.group]]
     id = "paketo-buildpacks/ca-certificates"
