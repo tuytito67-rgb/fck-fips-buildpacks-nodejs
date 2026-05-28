@@ -64,14 +64,20 @@ jobs:
           tags: ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/wolfi-run-base:latest
 
 
-      - name: Package and Publish Buildpacks
+      - name: Package and Publish Buildpacks node engine
         run: |
           pack buildpack package ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/wolfi-node-engine:1.0.0 \
             --path ./wolfi-node-buildpack \
+            --target linux/amd64 \
+            --target linux/arm64 \
             --publish
 
+      - name: Package and Publish Meta Buildpack meta
+        run: |
           pack buildpack package ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/nodejs-meta:1.0.0 \
             --config ./wolfi-nodejs-meta/package.toml \
+            --target linux/amd64 \
+            --target linux/arm64 \
             --publish
 
       - name: Create and Publish Custom Builder
