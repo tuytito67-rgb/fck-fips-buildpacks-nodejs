@@ -2,7 +2,7 @@
   uri = "."
 
 [[dependencies]]
-  uri = "docker://my-company/wolfi-node-engine:1.0.0"
+  uri = "docker://ghcr.io/samyt8336-arch/wolfi-node-engine:1.0.0"
 
 [[dependencies]]
   uri = "docker://docker.io/paketobuildpacks/ca-certificates:3.12.3"

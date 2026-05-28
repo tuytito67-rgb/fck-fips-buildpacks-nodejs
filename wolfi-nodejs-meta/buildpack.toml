@@ -1,7 +1,7 @@
 api = "0.10"
 
 [buildpack]
-  id = "my-company/nodejs"
+  id = "fckfips/nodejs"
   name = "Custom Paketo Buildpack for Node.js"
   version = "1.0.0"
 
