@@ -3,21 +3,21 @@ version: '3'
 tasks:
   build-stack:
     cmds:
-      - docker build -f stack/build.Dockerfile -t taha/wolfi-build-base:latest .
-      - docker build -f stack/run.Dockerfile -t taha/wolfi-run-base:latest .
+      - docker build -f stack/build.Dockerfile -t ghcr.io/samyt8336-arch/wolfi-build-base:latest .
+      - docker build -f stack/run.Dockerfile -t ghcr.io/samyt8336-arch/wolfi-run-base:latest .
 
   package-bp:
     cmds:
-      - pack buildpack package fckfips/wolfi-node-engine:1.0.0 --path ./wolfi-node-buildpack
+      - pack buildpack package ghcr.io/samyt8336-arch/wolfi-node-engine:1.0.0 --path ./wolfi-node-buildpack
 
   package-meta:
     deps: [package-bp]
     cmds:
-      - pack buildpack package fckfips/nodejs-meta:1.0.0 --config ./wolfi-nodejs-meta/package.toml 
+      - pack buildpack package ghcr.io/samyt8336-arch/nodejs-meta:1.0.0 --config ./wolfi-nodejs-meta/package.toml 
 
   create-builder:
     cmds:
-      - pack builder create fckfips/my-custom-builder:latest --config builder.toml 
+      - pack builder create ghcr.io/samyt8336-arch/fck-fips-builder-nodejs:latest --config builder.toml 
 
   build-app:
     cmds:
@@ -25,12 +25,11 @@ tasks:
       - |
         pack build fck-fips-lab \
           --path ./fck_ips_lab \
-          --builder my-custom-builder:latest \
+          --builder ghcr.io/samyt8336-arch/fck-fips-builder-nodejs:latest \
           --env NODE_ENV=production \
           --env BP_NODE_VERSION=22 \
           --env BP_NODE_RUN_SCRIPTS="build" \
           --env BP_NODE_OPTIMIZE_MEMORY=true
-
 
   run-app:
     cmds:
@@ -41,13 +40,7 @@ tasks:
           fck-fips-lab \
           /workspace/start.sh
 
-
   all:
     cmds:
-      - task build-stack
-      - task package-bp
-      - task package-meta
-      - task create-builder
       - task build-app
       - task run-app
-  
