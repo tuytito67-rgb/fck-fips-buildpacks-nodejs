@@ -63,13 +63,20 @@ jobs:
           push: true
           tags: ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/wolfi-run-base:latest
 
+
       - name: Update Configuration Templates for GHCR
         run: |
           sed -i "s|docker://my-company/wolfi-node-engine:1.0.0|../wolfi-node-buildpack|g" wolfi-nodejs-meta/package.toml
           sed -i "s|docker.io/paketobuildpacks|ghcr.io/paketo-buildpacks|g" wolfi-nodejs-meta/package.toml
           sed -i "s|my-company/nodejs-meta|${{ env.REGISTRY }}/${{ env.OWNER_LC }}/nodejs-meta|g" builder.toml
           sed -i "s|taha/wolfi-build-base|${{ env.REGISTRY }}/${{ env.OWNER_LC }}/wolfi-build-base|g" builder.toml
-          sed -i "s|taha/wolfi-run-base|${{ env.REGISTRY }}/${{ env.OWNER_LC }}/wolfi-run-base|g" builder.toml      - name: Package and Publish Buildpacks
+          sed -i "s|taha/wolfi-run-base|${{ env.REGISTRY }}/${{ env.OWNER_LC }}/wolfi-run-base|g" builder.toml
+
+
+
+
+
+
       - name: Package and Publish Buildpacks
         run: |
           pack buildpack package ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/wolfi-node-engine:1.0.0 \
