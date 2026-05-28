@@ -1,7 +1,7 @@
 api = "0.10"
 
 [buildpack]
-  id = "my-company/wolfi-node-engine"
+  id = "fckfips/wolfi-node-engine"
   version = "1.0.0"
   name = "Wolfi Node.js FIPS Engine"
   sbom-formats = [ "application/vnd.cyclonedx+json" ]

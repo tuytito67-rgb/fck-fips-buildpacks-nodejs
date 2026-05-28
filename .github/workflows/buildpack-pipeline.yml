@@ -121,3 +121,28 @@ jobs:
           subject-name: ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/my-custom-builder
           subject-digest: ${{ steps.resolve-digests.outputs.builder_digest }}
           push-to-registry: true
+
+
+  cleanup-ghcr-images:
+    needs: [build-and-publish]
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        package_name:
+          - wolfi-build-base
+          - wolfi-run-base
+          - wolfi-node-engine
+          - nodejs-meta
+          - my-custom-builder
+    steps:
+      - name: Cleanup Untagged Images
+        uses: dataaxiom/ghcr-cleanup-action@cd0cdb900b5dbf3a6f2cc869f0dbb0b8211f50c4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          package: ${{ matrix.package_name }}
+          older-than: 4 hour
+          delete-untagged: true
+          keep-n-tagged: 0

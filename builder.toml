@@ -5,7 +5,7 @@ description = "My Custom Wolfi Node.js FIPS Builder"
 
 [[order]]
   [[order.group]]
-    id = "my-company/nodejs"
+    id = "fckfips/nodejs"
     version = "1.0.0"
 
 [stack]
