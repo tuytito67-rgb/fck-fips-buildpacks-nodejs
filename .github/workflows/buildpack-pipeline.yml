@@ -83,7 +83,7 @@ jobs:
 
       - name: Create and Publish Custom Builder
         run: |
-          pack builder create ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/my-custom-builder:latest \
+          pack builder create ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/fck-fips-builder-nodejs:latest \
             --config builder.toml \
             --publish
 
@@ -91,7 +91,7 @@ jobs:
         id: resolve-digests
         run: |
           echo "meta_digest=$(crane digest ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/nodejs-meta:1.0.0)" >> $GITHUB_OUTPUT
-          echo "builder_digest=$(crane digest ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/my-custom-builder:latest)" >> $GITHUB_OUTPUT
+          echo "builder_digest=$(crane digest ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/fck-fips-builder-nodejs:latest)" >> $GITHUB_OUTPUT
 
       - name: Attest Build Base Image
         uses: actions/attest-build-provenance@v2
@@ -120,7 +120,7 @@ jobs:
       - name: Attest Custom Builder Image
         uses: actions/attest-build-provenance@v2
         with:
-          subject-name: ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/my-custom-builder
+          subject-name: ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/fck-fips-builder-nodejs
           subject-digest: ${{ steps.resolve-digests.outputs.builder_digest }}
           push-to-registry: true
           show-summary: false
@@ -137,7 +137,7 @@ jobs:
           - wolfi-build-base
           - wolfi-run-base
           - nodejs-meta
-          - my-custom-builder
+          - fck-fips-builder-nodejs
     steps:
       - name: Cleanup Untagged Images
         uses: dataaxiom/ghcr-cleanup-action@cd0cdb900b5dbf3a6f2cc869f0dbb0b8211f50c4
