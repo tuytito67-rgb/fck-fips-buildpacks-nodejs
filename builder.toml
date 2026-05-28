@@ -1,4 +1,4 @@
-description = "My Custom Wolfi Node.js FIPS Builder"
+description = "fck-fips Wolfi Node.js FIPS Builder"
 
 [[buildpacks]]
   uri = "docker://ghcr.io/samyt8336-arch/nodejs-meta:1.0.0"
