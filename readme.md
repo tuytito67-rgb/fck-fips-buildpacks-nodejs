@@ -6,6 +6,8 @@ High-Assurance, FIPS 140-3 Compliant Node.js Cloud Native Buildpacks on Wolfi OS
 
 This project provides a secure, production-hardened containerization pipeline for Node.js applications. It combines a custom Wolfi-based Node.js engine with FIPS 140-3 validated cryptography and Paketo's structural lifecycle buildpacks.
 
+<img width="1024" height="559" alt="bbe3cb2d-b99c-45d6-a703-1d4da7795018-modified" src="https://github.com/user-attachments/assets/8ffad752-6282-433b-aa32-448da7bcfaaf" />
+
 ---
 
 ## Architectural Layout
