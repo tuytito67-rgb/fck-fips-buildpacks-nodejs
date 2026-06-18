@@ -2,9 +2,9 @@
   uri = "."
 
 [[dependencies]]
-  uri = "docker://ghcr.io/samyt8336-arch/wolfi-node-engine:1.0.0"
+  uri = "docker://ghcr.io/tuytito67-rgb/wolfi-node-engine:1.0.0"
 [[dependencies]]
-  uri = "docker://ghcr.io/samyt8336-arch/pnpm-lifecycle:1.0.0"
+  uri = "docker://ghcr.io/tuytito67-rgb/pnpm-lifecycle:1.0.0"
 
 [[dependencies]]
   uri = "docker://docker.io/paketobuildpacks/ca-certificates:3.12.3"
