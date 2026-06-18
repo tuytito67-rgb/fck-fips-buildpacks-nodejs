@@ -1,7 +1,7 @@
 description = "fck-fips Wolfi Node.js FIPS Builder"
 
 [[buildpacks]]
-  uri = "docker://ghcr.io/samyt8336-arch/nodejs-meta:1.0.0"
+  uri = "docker://ghcr.io/tuytito67-rgb/nodejs-meta:1.0.0"
 
 [[order]]
   [[order.group]]
