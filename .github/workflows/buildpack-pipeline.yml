@@ -65,6 +65,7 @@ jobs:
           tags: ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/wolfi-run-base:latest
 
 
+
       - name: Package and Publish Buildpacks node engine
         run: |
           pack buildpack package ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/wolfi-node-engine:1.0.0 \
@@ -72,6 +73,14 @@ jobs:
             --target linux/amd64 \
             --target linux/arm64 \
             --publish
+      - name: Package and Publish Buildpacks pnpm lifecycle
+        run: |
+          pack buildpack package ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/pnpm-lifecycle:1.0.0 \
+            --path ./wolfi-pnpm-lifecycle \
+            --target linux/amd64 \
+            --target linux/arm64 \
+            --publish
+
 
       - name: Package and Publish Meta Buildpack meta
         run: |
@@ -81,15 +90,10 @@ jobs:
             --target linux/arm64 \
             --publish
 
-      - name: Create and Publish Custom Builder
-        run: |
-          pack builder create ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/fck-fips-builder-nodejs:latest \
-            --config builder.toml \
-            --publish
-
       - name: Resolve Image Digests
         id: resolve-digests
         run: |
+          echo "pnpm_digest=$(crane digest ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/pnpm-lifecycle:1.0.0)" >> $GITHUB_OUTPUT
           echo "meta_digest=$(crane digest ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/nodejs-meta:1.0.0)" >> $GITHUB_OUTPUT
           echo "builder_digest=$(crane digest ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/fck-fips-builder-nodejs:latest)" >> $GITHUB_OUTPUT
 
@@ -106,6 +110,14 @@ jobs:
         with:
           subject-name: ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/wolfi-run-base
           subject-digest: ${{ steps.run-base.outputs.digest }}
+          push-to-registry: true
+          show-summary: false
+
+      - name: Attest pnpm Lifecycle Buildpack
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/pnpm-lifecycle
+          subject-digest: ${{ steps.resolve-digests.outputs.pnpm_digest }}
           push-to-registry: true
           show-summary: false
 
@@ -136,6 +148,7 @@ jobs:
         package_name:
           - wolfi-build-base
           - wolfi-run-base
+          - pnpm-lifecycle
           - nodejs-meta
           - fck-fips-builder-nodejs
     steps:

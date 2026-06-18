@@ -15,6 +15,36 @@ api = "0.10"
     optional = true
     version = "3.9.4"
   [[order.group]]
+    id = "fckfips/wolfi-node-engine"
+    version = "1.0.0"
+  [[order.group]]
+    id = "fckfips/pnpm-lifecycle"
+    version = "1.0.0"
+  [[order.group]]
+    id = "paketo-buildpacks/procfile"
+    optional = true
+    version = "5.13.3"
+  [[order.group]]
+    id = "paketo-buildpacks/environment-variables"
+    optional = true
+    version = "4.11.3"
+  [[order.group]]
+    id = "paketo-buildpacks/image-labels"
+    optional = true
+    version = "4.12.3"
+
+
+
+[[order]]
+  [[order.group]]
+    id = "paketo-buildpacks/ca-certificates"
+    optional = true
+    version = "3.12.3"
+  [[order.group]]
+    id = "paketo-buildpacks/watchexec"
+    optional = true
+    version = "3.9.4"
+  [[order.group]]
     id = "paketo-buildpacks/cpython"
     optional = true
     version = "1.18.28"

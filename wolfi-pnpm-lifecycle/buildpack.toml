@@ -1,0 +1,14 @@
+api = "0.10"
+
+[buildpack]
+  id = "fckfips/pnpm-lifecycle"
+  version = "1.0.0"
+  name = "Wolfi pnpm Lifecycle Buildpack"
+
+[[targets]]
+  os = "linux"
+  arch = "amd64"
+
+[[targets]]
+  os = "linux"
+  arch = "arm64"

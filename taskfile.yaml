@@ -9,11 +9,17 @@ tasks:
   package-bp:
     cmds:
       - pack buildpack package ghcr.io/samyt8336-arch/wolfi-node-engine:1.0.0 --path ./wolfi-node-buildpack
+ 
+
+  package-pnpm-bp:
+    desc: "Package the custom Wolfi pnpm lifecycle buildpack"
+    cmds:
+      - pack buildpack package ghcr.io/samyt8336-arch/pnpm-lifecycle:1.0.0 --path ./wolfi-pnpm-lifecycle
 
   package-meta:
-    deps: [package-bp]
+    deps: [package-bp, package-pnpm-bp]
     cmds:
-      - pack buildpack package ghcr.io/samyt8336-arch/nodejs-meta:1.0.0 --config ./wolfi-nodejs-meta/package.toml 
+      - pack buildpack package ghcr.io/samyt8336-arch/nodejs-meta:1.0.0 --config ./wolfi-nodejs-meta/package.toml
 
   create-builder:
     cmds:

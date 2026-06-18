@@ -1,0 +1,57 @@
+#!/usr/bin/env python3
+import os
+import sys
+import subprocess
+import shutil
+
+def main():
+    layers_dir = sys.argv[1]
+    
+    pnpm_layer_path = os.path.join(layers_dir, "pnpm-cache")
+    os.makedirs(pnpm_layer_path, exist_ok=True)
+    
+    with open(f"{pnpm_layer_path}.toml", 'w') as f:
+        f.write("[types]\n  build = false\n  launch = false\n  cache = true\n")
+
+    working_dir = os.getcwd()
+    project_path = working_dir
+    custom_path = os.environ.get("BP_NODE_PROJECT_PATH", "")
+    if custom_path:
+        project_path = os.path.normpath(os.path.join(working_dir, custom_path))
+
+    env = os.environ.copy()
+    
+    subprocess.run(["pnpm", "config", "set", "store-dir", pnpm_layer_path], cwd=project_path, env=env, check=True)
+
+    if os.environ.get("BP_DISABLE_NODE_MODULES_SYMLINKS") == "true":
+        subprocess.run(["pnpm", "config", "set", "node-linker", "hoisted"], cwd=project_path, env=env, check=True)
+    
+    install_cmd = ["pnpm", "install", "--frozen-lockfile"]
+    
+    if os.environ.get("NPM_CONFIG_IGNORE_SCRIPTS") == "true" or os.environ.get("BP_PNPM_IGNORE_SCRIPTS") == "true":
+        install_cmd.append("--ignore-scripts")
+        
+    custom_install_args = os.environ.get("BP_PNPM_INSTALL_ARGS", "")
+    if custom_install_args:
+        install_cmd.extend(custom_install_args.split())
+
+    subprocess.run(install_cmd, cwd=project_path, env=env, check=True)
+
+    run_scripts = os.environ.get("BP_NODE_RUN_SCRIPTS", "")
+    if run_scripts:
+        for script in run_scripts.split(","):
+            build_cmd = ["pnpm", "run", script.strip()]
+            custom_build_args = os.environ.get("BP_PNPM_BUILD_ARGS", "")
+            if custom_build_args:
+                build_cmd.extend(custom_build_args.split())
+            subprocess.run(build_cmd, cwd=project_path, env=env, check=True)
+
+        if os.environ.get("NODE_ENV") == "production":
+            subprocess.run(["pnpm", "prune", "--prod"], cwd=project_path, env=env, check=True)
+
+    launch_toml = os.path.join(layers_dir, "launch.toml")
+    with open(launch_toml, 'w') as f:
+        f.write('[[processes]]\n  type = "web"\n  command = "pnpm start"\n  default = true\n  direct = false\n')
+
+if __name__ == "__main__":
+    main()
