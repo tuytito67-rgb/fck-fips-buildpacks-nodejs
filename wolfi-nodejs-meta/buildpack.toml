@@ -15,6 +15,10 @@ api = "0.10"
     optional = true
     version = "3.9.4"
   [[order.group]]
+    id = "paketo-buildpacks/cpython"
+    optional = true
+    version = "1.18.28"
+  [[order.group]]
     id = "fckfips/wolfi-node-engine"
     version = "1.0.0"
   [[order.group]]
@@ -32,8 +36,6 @@ api = "0.10"
     id = "paketo-buildpacks/image-labels"
     optional = true
     version = "4.12.3"
-
-
 
 [[order]]
   [[order.group]]
