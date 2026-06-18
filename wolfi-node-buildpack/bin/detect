@@ -91,8 +91,10 @@ def main():
             out += f"version-source = \"{r['source']}\"\n\n"
         return out
 
-    output = "[[provides]]\nname = \"node\"\n\n" + render_toml(requirements)
+    output = "[[provides]]\nname = \"node\"\n\n" + render_toml(requirements) 
     output += "[[or]]\n[[provides]]\nname = \"node\"\n[[provides]]\nname = \"npm\"\n\n" + render_toml(requirements)
+    output += "[[or]]\n[[provides]]\nname = \"node\"\n[[provides]]\nname = \"pnpm\"\n\n" + render_toml(requirements) 
+
 
     with open(build_plan_path, 'w') as f:
         f.write(output)
