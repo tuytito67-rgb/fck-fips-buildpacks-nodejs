@@ -3,6 +3,9 @@ import os
 import sys
 
 def main():
+    if len(sys.argv) < 3:
+        sys.exit(100)
+        
     build_plan_path = sys.argv[2]
     working_dir = os.getcwd()
     
@@ -17,15 +20,8 @@ def main():
     if env_type != "pnpm" and not os.path.exists(lockfile_path):
         sys.exit(100)
 
-    output = """[[provides]]
-name = "node_modules"
-
-[[requires]]
-name = "node"
-
-[[requires]]
-name = "pnpm"
-"""
+    output = "[[provides]]\nname = \"node_modules\"\n\n[[requires]]\nname = \"node\"\n\n[[requires]]\nname = \"pnpm\"\n"
+    
     with open(build_plan_path, 'w') as f:
         f.write(output)
 
