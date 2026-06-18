@@ -1,57 +1,279 @@
 #!/usr/bin/env python3
 import os
 import sys
+import platform
+import json
+import yaml
+import urllib.request
+import gzip
+import io
+import tarfile
 import subprocess
 import shutil
+import re
+
+def get_pnpm_version():
+    env_version = os.environ.get("BP_PNPM_VERSION")
+    if env_version:
+        return env_version
+
+    try:
+        workspace_dir = os.environ.get("CNB_APP_DIR", "/workspace")
+        pkg_json_path = os.path.join(workspace_dir, "package.json")
+        if os.path.exists(pkg_json_path):
+            with open(pkg_json_path, 'r') as f:
+                data = json.load(f)
+                pm = data.get("packageManager", "")
+                if pm.startswith("pnpm@"):
+                    version = pm.split("@")[1]
+                    if "+" in version:
+                        version = version.split("+")[0]
+                    return version
+    except Exception:
+        pass
+
+    return "9.1.0"
+
+def ensure_pnpm(layers_dir, version, layer_id="pnpm", build=True, launch=False, cache=True):
+    layer_path = os.path.join(layers_dir, layer_id)
+    toml_path = f"{layer_path}.toml"
+
+    is_valid = False
+    if os.path.exists(toml_path):
+        try:
+            with open(toml_path, 'r') as f:
+                if f'version = "{version}"' in f.read():
+                    is_valid = True
+        except:
+            pass
+
+    if not is_valid:
+        print(f"--- Delivering pnpm {version} to {layer_id} layer ---")
+        if os.path.exists(layer_path):
+            shutil.rmtree(layer_path)
+        os.makedirs(layer_path, exist_ok=True)
+
+        url = f"https://registry.npmjs.org/pnpm/-/pnpm-{version}.tgz"
+        try:
+            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+            with urllib.request.urlopen(req) as r:
+                with tarfile.open(fileobj=io.BytesIO(r.read()), mode="r:gz") as tar:
+                    tar.extractall(path=layer_path)
+            
+            pkg_dir = os.path.join(layer_path, "package")
+            if os.path.exists(pkg_dir):
+                for item in os.listdir(pkg_dir):
+                    shutil.move(os.path.join(pkg_dir, item), layer_path)
+                os.rmdir(pkg_dir)
+
+            bin_dir = os.path.join(layer_path, "bin")
+            pnpm_cjs = os.path.join(bin_dir, "pnpm.cjs")
+            pnpm_bin = os.path.join(bin_dir, "pnpm")
+            if os.path.exists(pnpm_cjs):
+                os.chmod(pnpm_cjs, 0o755)
+                if not os.path.exists(pnpm_bin):
+                    os.symlink("pnpm.cjs", pnpm_bin)
+                os.chmod(pnpm_bin, 0o755)
+
+        except Exception as e:
+            print(f"Error downloading pnpm {version}: {e}")
+            sys.exit(1)
+    else:
+        print(f"--- Reusing cached {layer_id} layer ---")
+
+    env_dir = os.path.join(layer_path, "env.build")
+    os.makedirs(env_dir, exist_ok=True)
+    with open(os.path.join(env_dir, "PATH.prepend"), 'w') as f:
+        f.write(os.path.join(layer_path, "bin"))
+    with open(os.path.join(env_dir, "PATH.delim"), 'w') as f:
+        f.write(":")
+
+    b_str = "true" if build else "false"
+    l_str = "true" if launch else "false"
+    c_str = "true" if cache else "false"
+    content = f'''[types]
+  build = {b_str}
+  launch = {l_str}
+  cache = {c_str}
+
+[metadata]
+  version = "{version}"
+'''
+    with open(toml_path, 'w') as f:
+        f.write(content)
+
+    return layer_path
+
+def resolve_wolfi_package(arch, package_name):
+    base_url = f"https://packages.wolfi.dev/os/{arch}/"
+    index_url = f"{base_url}APKINDEX.tar.gz"
+    req = urllib.request.Request(index_url, headers={'User-Agent': 'Mozilla/5.0'})
+    with urllib.request.urlopen(req) as r:
+        content = r.read()
+    with gzip.GzipFile(fileobj=io.BytesIO(content)) as f:
+        with tarfile.open(fileobj=io.BytesIO(f.read())) as tar:
+            index_data = tar.extractfile("APKINDEX").read().decode('utf-8')
+    packages = [pkg for pkg in index_data.split('\n\n') if f"P:{package_name}\n" in pkg]
+    if not packages:
+        return None, None
+    latest_pkg = sorted(packages, key=lambda x: [line for line in x.split('\n') if line.startswith('V:')][0])[-1]
+    version = [line[2:] for line in latest_pkg.split('\n') if line.startswith('V:')][0]
+    return f"{base_url}{package_name}-{version}.apk", version
+
+def setup_layer_env(layer_path, env_type):
+    env_dir = os.path.join(layer_path, env_type)
+    os.makedirs(env_dir, exist_ok=True)
+    bin_dir = os.path.join(layer_path, "usr", "bin")
+    with open(os.path.join(env_dir, "PATH.prepend"), 'w') as f:
+        f.write(bin_dir)
+    with open(os.path.join(env_dir, "PATH.delim"), 'w') as f:
+        f.write(":")
+    if "node" in layer_path:
+        with open(os.path.join(env_dir, "NODE_HOME"), 'w') as f:
+            f.write(layer_path)
+        if os.environ.get("BP_NODE_OPTIMIZE_MEMORY") == "true":
+            with open(os.path.join(env_dir, "OPTIMIZE_MEMORY"), 'w') as f:
+                f.write("true")
+
+def write_layer_metadata(layer_path, version, build, launch, cache):
+    b_str = "true" if build else "false"
+    l_str = "true" if launch else "false"
+    c_str = "true" if cache else "false"
+    content = f"""[types]
+  build = {b_str}
+  launch = {l_str}
+  cache = {c_str}
+
+[metadata]
+  version = "{version}"
+"""
+    with open(f"{layer_path}.toml", 'w') as f:
+        f.write(content)
+
+def generate_layer_sbom(layer_path, pkg_name, version, arch):
+    sbom_path = f"{layer_path}.sbom.cdx.json"
+    purl = f"pkg:apk/wolfi/{pkg_name}@{version}?arch={arch}"
+    
+    sbom_data = {
+        "bomFormat": "CycloneDX",
+        "specVersion": "1.4",
+        "version": 1,
+        "components": [
+            {
+                "type": "application",
+                "name": pkg_name,
+                "version": version,
+                "purl": purl
+            }
+        ]
+    }
+    
+    with open(sbom_path, 'w') as f:
+        json.dump(sbom_data, f, indent=2)
+
+def ensure_package(layers_dir, arch, package_name, layer_id, build, launch, cache, env_type):
+    url, version = resolve_wolfi_package(arch, package_name)
+    if not url:
+        sys.exit(1)
+    layer_path = os.path.join(layers_dir, layer_id)
+    toml_path = f"{layer_path}.toml"
+    is_valid = False
+    if os.path.exists(toml_path):
+        with open(toml_path, 'r') as f:
+            if f'version = "{version}"' in f.read():
+                is_valid = True
+    if not is_valid:
+        print(f"--- Delivering {package_name} {version} to {layer_id} layer ---")
+        if os.path.exists(layer_path):
+            shutil.rmtree(layer_path)
+        os.makedirs(layer_path, exist_ok=True)
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req) as r:
+            with tarfile.open(fileobj=io.BytesIO(r.read()), mode="r:gz") as tar:
+                tar.extractall(path=layer_path)
+    else:
+        print(f"--- Reusing cached {layer_id} layer ---")
+    setup_layer_env(layer_path, env_type)
+    write_layer_metadata(layer_path, version, build, launch, cache)
+    generate_layer_sbom(layer_path, package_name, version, arch)
+    return layer_path
+
+def setup_exec_d(cnb_dir, node_layer_path, arch):
+    import shutil
+    import subprocess
+    exec_d_path = os.path.join(node_layer_path, "exec.d")
+    os.makedirs(exec_d_path, exist_ok=True)
+    precompiled_dir = os.path.join(cnb_dir, "bin", "linux", arch)
+    opt_mem_precompiled = os.path.join(precompiled_dir, "0-optimize-memory")
+    inspector_precompiled = os.path.join(precompiled_dir, "1-inspector")
+    if os.path.exists(opt_mem_precompiled) and os.path.exists(inspector_precompiled):
+        shutil.copy(opt_mem_precompiled, os.path.join(exec_d_path, "0-optimize-memory"))
+        shutil.copy(inspector_precompiled, os.path.join(exec_d_path, "1-inspector"))
+    else:
+        opt_mem_src = os.path.join(cnb_dir, "bin", "0-optimize-memory")
+        inspector_src = os.path.join(cnb_dir, "bin", "1-inspector")
+        subprocess.run(["pyinstaller", "--onefile", opt_mem_src], check=True, stdout=subprocess.DEVNULL)
+        subprocess.run(["pyinstaller", "--onefile", inspector_src], check=True, stdout=subprocess.DEVNULL)
+        shutil.copy("dist/0-optimize-memory", os.path.join(exec_d_path, "0-optimize-memory"))
+        shutil.copy("dist/1-inspector", os.path.join(exec_d_path, "1-inspector"))
+        shutil.rmtree("build", ignore_errors=True)
+        shutil.rmtree("dist", ignore_errors=True)
+        for f in os.listdir("."):
+            if f.endswith(".spec"): os.remove(f)
+    os.chmod(os.path.join(exec_d_path, "0-optimize-memory"), 0o755)
+    os.chmod(os.path.join(exec_d_path, "1-inspector"), 0o755)
+
+def parse_requested_version(plan_path):
+    if not os.path.exists(plan_path):
+        return "20"
+    try:
+        with open(plan_path, 'r') as f:
+            content = f.read()
+        entries = content.split('[[entries]]')
+        for entry in entries:
+            if 'name = "node"' in entry:
+                match = re.search(r'version\s*=\s*"([^"]+)"', entry)
+                if match:
+                    v = match.group(1)
+                    for c in ["^", "~", "<", ">", "="]: v = v.replace(c, "")
+                    major = v.split(".")[0]
+                    if major.isdigit(): return major
+    except:
+        pass
+    return "20"
 
 def main():
     layers_dir = sys.argv[1]
+    platform_dir = sys.argv[2]
+    build_plan_path = sys.argv[3]
     
-    pnpm_layer_path = os.path.join(layers_dir, "pnpm-cache")
-    os.makedirs(pnpm_layer_path, exist_ok=True)
+    raw_arch = platform.machine().lower()
+    if raw_arch in ["x86_64", "amd64"]:
+        arch = "x86_64"
+    elif raw_arch in ["aarch64", "arm64"]:
+        arch = "aarch64"
+    else:
+        arch = raw_arch
+
+    cnb_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    major_version = os.environ.get("BP_NODE_VERSION", "")
+    if not major_version:
+        major_version = parse_requested_version(build_plan_path)
+
+    major_version = re.sub(r'[^0-9]', '', major_version.split('.')[0])
+    if not major_version:
+        major_version = "20"
+
+    ensure_package(layers_dir, arch, f"nodejs-{major_version}", "node", build=True, launch=False, cache=True, env_type="env.build")
+    ensure_package(layers_dir, arch, "npm", "npm", build=True, launch=False, cache=True, env_type="env.build")
+    ensure_package(layers_dir, arch, "yarn", "yarn", build=True, launch=False, cache=True, env_type="env.build")
     
-    with open(f"{pnpm_layer_path}.toml", 'w') as f:
-        f.write("[types]\n  build = false\n  launch = false\n  cache = true\n")
+    pnpm_version = get_pnpm_version()
+    ensure_pnpm(layers_dir, pnpm_version, "pnpm", build=True, launch=False, cache=True)
 
-    working_dir = os.getcwd()
-    project_path = working_dir
-    custom_path = os.environ.get("BP_NODE_PROJECT_PATH", "")
-    if custom_path:
-        project_path = os.path.normpath(os.path.join(working_dir, custom_path))
-
-    env = os.environ.copy()
+    min_node = ensure_package(layers_dir, arch, f"nodejs-{major_version}-minimal", "node-minimal", build=False, launch=True, cache=True, env_type="env.launch")
     
-    subprocess.run(["pnpm", "config", "set", "store-dir", pnpm_layer_path], cwd=project_path, env=env, check=True)
-
-    if os.environ.get("BP_DISABLE_NODE_MODULES_SYMLINKS") == "true":
-        subprocess.run(["pnpm", "config", "set", "node-linker", "hoisted"], cwd=project_path, env=env, check=True)
-    
-    install_cmd = ["pnpm", "install", "--frozen-lockfile"]
-    
-    if os.environ.get("NPM_CONFIG_IGNORE_SCRIPTS") == "true" or os.environ.get("BP_PNPM_IGNORE_SCRIPTS") == "true":
-        install_cmd.append("--ignore-scripts")
-        
-    custom_install_args = os.environ.get("BP_PNPM_INSTALL_ARGS", "")
-    if custom_install_args:
-        install_cmd.extend(custom_install_args.split())
-
-    subprocess.run(install_cmd, cwd=project_path, env=env, check=True)
-
-    run_scripts = os.environ.get("BP_NODE_RUN_SCRIPTS", "")
-    if run_scripts:
-        for script in run_scripts.split(","):
-            build_cmd = ["pnpm", "run", script.strip()]
-            custom_build_args = os.environ.get("BP_PNPM_BUILD_ARGS", "")
-            if custom_build_args:
-                build_cmd.extend(custom_build_args.split())
-            subprocess.run(build_cmd, cwd=project_path, env=env, check=True)
-
-        if os.environ.get("NODE_ENV") == "production":
-            subprocess.run(["pnpm", "prune", "--prod"], cwd=project_path, env=env, check=True)
-
-    launch_toml = os.path.join(layers_dir, "launch.toml")
-    with open(launch_toml, 'w') as f:
-        f.write('[[processes]]\n  type = "web"\n  command = "pnpm start"\n  default = true\n  direct = false\n')
+    setup_exec_d(cnb_dir, min_node, arch)
 
 if __name__ == "__main__":
     main()
